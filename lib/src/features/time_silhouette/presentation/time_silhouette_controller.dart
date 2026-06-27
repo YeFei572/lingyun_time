@@ -5,13 +5,17 @@ import '../../../shared/models/memory_item.dart';
 import '../data/memory_repository_provider.dart';
 
 final timeSilhouetteControllerProvider =
-    AsyncNotifierProvider<TimeSilhouetteController, List<MemoryItem>>(TimeSilhouetteController.new);
+    AsyncNotifierProvider<TimeSilhouetteController, List<MemoryItem>>(
+      TimeSilhouetteController.new,
+    );
 
 class TimeSilhouetteController extends AsyncNotifier<List<MemoryItem>> {
   @override
   Future<List<MemoryItem>> build() async {
     final repo = await ref.watch(memoryRepositoryProvider.future);
-    return repo.loadAll();
+    final loadedItems = await repo.loadAll();
+    await repo.saveAll(loadedItems);
+    return loadedItems;
   }
 
   Future<void> addMemory({
@@ -21,7 +25,7 @@ class TimeSilhouetteController extends AsyncNotifier<List<MemoryItem>> {
     required DateTime createdAt,
   }) async {
     final repo = await ref.read(memoryRepositoryProvider.future);
-    final current = [...state.valueOrNull ?? <MemoryItem>[]];
+    final current = [...(state.valueOrNull ?? <MemoryItem>[])];
     current.insert(
       0,
       MemoryItem(

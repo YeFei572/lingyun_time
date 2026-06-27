@@ -111,7 +111,7 @@ class BabyLogController extends AsyncNotifier<List<BabyLogEntry>> {
       return true;
     }
     for (var i = 0; i < oldItems.length; i++) {
-      if (oldItems[i].id != newItems[i].id) {
+      if (oldItems[i].toJson().toString() != newItems[i].toJson().toString()) {
         return true;
       }
     }

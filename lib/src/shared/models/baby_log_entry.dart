@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class BabyLogEntry {
   BabyLogEntry({
     required this.id,
@@ -47,14 +49,33 @@ class BabyLogEntry {
 
   factory BabyLogEntry.fromJson(Map<String, dynamic> json) {
     final time = DateTime.parse(json['time'] as String);
-    final rawType = json['type'] as String;
+    final rawType = json['type'] as String? ?? '';
     return BabyLogEntry(
       id: json['id'] as String,
-      type: rawType == '大便' ? '小便' : rawType,
+      type: _normalizeType(rawType),
       time: time,
       amountMl: json['amountMl'] as int? ?? 0,
       note: json['note'] as String? ?? '',
       sortOrder: (json['sortOrder'] as num?)?.toInt() ?? time.microsecondsSinceEpoch,
     );
+  }
+
+  static String _normalizeType(String rawType) {
+    final repaired = _repairMojibake(rawType).trim();
+    return switch (repaired) {
+      '吃奶' => '吃奶',
+      '小便' || '大便' => '小便',
+      _ => repaired,
+    };
+  }
+
+  static String _repairMojibake(String value) {
+    try {
+      return utf8.decode(latin1.encode(value));
+    } on FormatException {
+      return value;
+    } on ArgumentError {
+      return value;
+    }
   }
 }

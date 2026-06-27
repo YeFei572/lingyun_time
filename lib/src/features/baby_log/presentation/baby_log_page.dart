@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/models/baby_log_entry.dart';
@@ -77,8 +78,16 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
           return TabBarView(
             controller: _tabController,
             children: [
-              _LogList(items: feedItems, showChartButton: true),
-              _LogList(items: urineItems, showChartButton: false),
+              _LogList(
+                items: feedItems,
+                recordKind: 'feeding',
+                showChartButton: true,
+              ),
+              _LogList(
+                items: urineItems,
+                recordKind: 'urination',
+                showChartButton: false,
+              ),
             ],
           );
         },
@@ -104,7 +113,14 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     String selectedType = defaultType;
-    var selectedTime = DateTime.now();
+    final now = DateTime.now();
+    var selectedTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+    );
 
     await showModalBottomSheet<void>(
       context: context,
@@ -249,7 +265,6 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
   Future<DateTime?> _pickRecordTime(BuildContext context, DateTime initialTime) async {
     var selectedHour = initialTime.hour;
     var selectedMinute = initialTime.minute;
-    var selectedSecond = initialTime.second;
 
     return showDialog<DateTime>(
       context: context,
@@ -277,15 +292,6 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
                       onChanged: (value) => setState(() => selectedMinute = value),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _TimePartDropdown(
-                      label: '秒',
-                      value: selectedSecond,
-                      maxValue: 59,
-                      onChanged: (value) => setState(() => selectedSecond = value),
-                    ),
-                  ),
                 ],
               ),
               actions: [
@@ -303,7 +309,6 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
                         initialTime.day,
                         selectedHour,
                         selectedMinute,
-                        selectedSecond,
                       ),
                     );
                   },
@@ -382,7 +387,7 @@ class _TimePickerTile extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                DateFormat('HH:mm:ss').format(selectedTime),
+                DateFormat('HH:mm').format(selectedTime),
                 style: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600),
               ),
             ),
@@ -418,10 +423,12 @@ class _SectionLabel extends StatelessWidget {
 class _LogList extends StatelessWidget {
   const _LogList({
     required this.items,
+    required this.recordKind,
     required this.showChartButton,
   });
 
   final List<BabyLogEntry> items;
+  final String recordKind;
   final bool showChartButton;
 
   @override
@@ -437,6 +444,7 @@ class _LogList extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _DailyLogGroup(
                   group: group,
+                  recordKind: recordKind,
                   showChartButton: showChartButton,
                 ),
               )),
@@ -507,17 +515,39 @@ class _DailyLogGroupData {
   final List<BabyLogEntry> items;
 }
 
-class _DailyLogGroup extends ConsumerWidget {
+class _DailyLogGroup extends ConsumerStatefulWidget {
   const _DailyLogGroup({
     required this.group,
+    required this.recordKind,
     required this.showChartButton,
   });
 
   final _DailyLogGroupData group;
+  final String recordKind;
   final bool showChartButton;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DailyLogGroup> createState() => _DailyLogGroupState();
+}
+
+class _DailyLogGroupState extends ConsumerState<_DailyLogGroup> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    // 内层拖拽列表不需要保存滚动位置；关闭 PageStorage 写入，避免和 ExpansionTile 的折叠状态冲突。
+    _scrollController = ScrollController(keepScrollOffset: false);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Card(
@@ -525,8 +555,9 @@ class _DailyLogGroup extends ConsumerWidget {
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          key: PageStorageKey(group.dayKey),
+          key: PageStorageKey('${widget.recordKind}-${widget.group.dayKey}'),
           initiallyExpanded: true,
+          maintainState: true,
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           iconColor: scheme.onSurfaceVariant,
@@ -535,14 +566,14 @@ class _DailyLogGroup extends ConsumerWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${group.label} · ${group.items.length} 条',
+                  '${widget.group.label} · ${widget.group.items.length} 条',
                   style: TextStyle(
                     color: scheme.onSurface,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              if (showChartButton)
+              if (widget.showChartButton)
                 IconButton(
                   tooltip: '奶量曲线',
                   visualDensity: VisualDensity.compact,
@@ -550,8 +581,8 @@ class _DailyLogGroup extends ConsumerWidget {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => FeedingChartPage(
-                          dayLabel: group.label,
-                          items: group.items,
+                          dayLabel: widget.group.label,
+                          items: widget.group.items,
                         ),
                       ),
                     );
@@ -564,6 +595,9 @@ class _DailyLogGroup extends ConsumerWidget {
           collapsedBackgroundColor: isDark ? const Color(0xFF171E27) : Colors.white,
           children: [
             ReorderableListView.builder(
+              key: ValueKey('reorderable-${widget.recordKind}-${widget.group.dayKey}'),
+              scrollController: _scrollController,
+              primary: false,
               padding: EdgeInsets.zero,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -577,9 +611,9 @@ class _DailyLogGroup extends ConsumerWidget {
                   ),
                 );
               },
-              itemCount: group.items.length,
+              itemCount: widget.group.items.length,
               onReorder: (oldIndex, newIndex) {
-                final reorderedItems = [...group.items];
+                final reorderedItems = [...widget.group.items];
                 if (oldIndex < newIndex) {
                   newIndex -= 1;
                 }
@@ -590,7 +624,7 @@ class _DailyLogGroup extends ConsumerWidget {
                     );
               },
               itemBuilder: (context, index) {
-                final entry = group.items[index];
+                final entry = widget.group.items[index];
                 return Padding(
                   key: ValueKey(entry.id),
                   padding: const EdgeInsets.only(bottom: 8),
@@ -653,11 +687,21 @@ class _LogTile extends ConsumerWidget {
           backgroundColor: entry.isFeeding
               ? (isDark ? const Color(0xFF2B394A) : const Color(0xFFE8CFC3))
               : (isDark ? const Color(0xFF313342) : const Color(0xFFE7DCC6)),
-          child: Icon(entry.isFeeding ? Icons.local_cafe : Icons.delete_sweep),
+          child: entry.isFeeding
+              ? HugeIcon(
+                  icon: HugeIcons.strokeRoundedBabyBottle,
+                  color: isDark ? const Color(0xFFE7EAF0) : const Color(0xFF5B392B),
+                  size: 23,
+                )
+              : Icon(
+                  HugeIcons.strokeRoundedDiaper,
+                  color: isDark ? const Color(0xFFE7EAF0) : const Color(0xFF5B392B),
+                  size: 23,
+                ),
         ),
         title: Text(entry.isFeeding ? '吃奶 · ${entry.amountMl} ml' : '小便'),
         subtitle: Text(
-          DateFormat('HH:mm:ss').format(entry.time),
+          DateFormat('HH:mm').format(entry.time),
           style: TextStyle(color: scheme.onSurfaceVariant),
         ),
         trailing: Row(
@@ -678,7 +722,7 @@ class _LogTile extends ConsumerWidget {
             ),
             IconButton(
               onPressed: () => ref.read(babyLogControllerProvider.notifier).deleteEntry(entry.id),
-              icon: const Icon(Icons.delete_outline),
+              icon: const Icon(HugeIcons.strokeRoundedDelete03),
               tooltip: '删除',
             ),
           ],

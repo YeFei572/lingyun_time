@@ -58,7 +58,7 @@ packages:
     source: hosted
     version: "0.3.5+2"
   crypto:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: crypto
       sha256: c8ea0233063ba03258fbcf2ca4d6dadfefe14f02fab57702265467a19f27fadf
@@ -160,6 +160,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  hugeicons:
+    dependency: "direct main"
+    description:
+      name: hugeicons
+      sha256: cf172bae0c3ff2e2114324d05e79872081f4cd3c009f5979285fec73a693096a
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.0.11"
   intl:
     dependency: "direct main"
     description:

@@ -9,6 +9,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build-android:
     name: Build Android Artifacts
@@ -44,11 +47,17 @@ jobs:
       - name: Build release App Bundle
         run: flutter build appbundle --release
 
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-release.apk release/lingyun-time-${GITHUB_REF_NAME}.apk
+          cp build/app/outputs/bundle/release/app-release.aab release/lingyun-time-${GITHUB_REF_NAME}.aab
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: lingyun-time-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: release/lingyun-time-${{ github.ref_name }}.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -56,6 +65,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lingyun-time-release-aab
-          path: build/app/outputs/bundle/release/app-release.aab
+          path: release/lingyun-time-${{ github.ref_name }}.aab
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 凌云时光 ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release/lingyun-time-${{ github.ref_name }}.apk
+            release/lingyun-time-${{ github.ref_name }}.aab

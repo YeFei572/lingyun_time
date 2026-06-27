@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/models/baby_log_entry.dart';
@@ -218,7 +219,11 @@ class _RecordTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.local_cafe, color: scheme.primary),
+          HugeIcon(
+            icon: HugeIcons.strokeRoundedBabyBottle,
+            color: scheme.primary,
+            size: 24,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
