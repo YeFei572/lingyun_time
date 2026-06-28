@@ -4,6 +4,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/models/baby_log_entry.dart';
+import '../../settings/presentation/baby_profile_controller.dart';
 import 'baby_log_controller.dart';
 import 'feeding_chart_page.dart';
 
@@ -32,6 +33,7 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(babyLogControllerProvider);
+    final babyProfileState = ref.watch(babyProfileControllerProvider);
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
@@ -74,6 +76,10 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
         data: (items) {
           final feedItems = items.where((e) => e.isFeeding).toList();
           final urineItems = items.where((e) => e.isUrination).toList();
+          final birthDate = babyProfileState.maybeWhen(
+            data: (profile) => profile.birthDate,
+            orElse: () => null,
+          );
 
           return TabBarView(
             controller: _tabController,
@@ -81,11 +87,13 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
               _LogList(
                 items: feedItems,
                 recordKind: 'feeding',
+                birthDate: birthDate,
                 showChartButton: true,
               ),
               _LogList(
                 items: urineItems,
                 recordKind: 'urination',
+                birthDate: birthDate,
                 showChartButton: false,
               ),
             ],
@@ -424,11 +432,13 @@ class _LogList extends StatelessWidget {
   const _LogList({
     required this.items,
     required this.recordKind,
+    required this.birthDate,
     required this.showChartButton,
   });
 
   final List<BabyLogEntry> items;
   final String recordKind;
+  final DateTime? birthDate;
   final bool showChartButton;
 
   @override
@@ -445,6 +455,7 @@ class _LogList extends StatelessWidget {
                 child: _DailyLogGroup(
                   group: group,
                   recordKind: recordKind,
+                  birthDate: birthDate,
                   showChartButton: showChartButton,
                 ),
               )),
@@ -519,11 +530,13 @@ class _DailyLogGroup extends ConsumerStatefulWidget {
   const _DailyLogGroup({
     required this.group,
     required this.recordKind,
+    required this.birthDate,
     required this.showChartButton,
   });
 
   final _DailyLogGroupData group;
   final String recordKind;
+  final DateTime? birthDate;
   final bool showChartButton;
 
   @override
@@ -566,7 +579,7 @@ class _DailyLogGroupState extends ConsumerState<_DailyLogGroup> {
             children: [
               Expanded(
                 child: Text(
-                  '${widget.group.label} · ${widget.group.items.length} 条',
+                  _buildTitleText(),
                   style: TextStyle(
                     color: scheme.onSurface,
                     fontWeight: FontWeight.w700,
@@ -637,6 +650,22 @@ class _DailyLogGroupState extends ConsumerState<_DailyLogGroup> {
       ),
     );
   }
+
+  String _buildTitleText() {
+    final base = '${widget.group.label} · ${widget.group.items.length} 条';
+    if (widget.recordKind != 'feeding') {
+      return base;
+    }
+
+    final totalMl = widget.group.items
+        .where((item) => item.isFeeding)
+        .fold<int>(0, (sum, item) => sum + item.amountMl);
+    if (totalMl <= 0) {
+      return base;
+    }
+
+    return '$base · ${totalMl} ml';
+  }
 }
 
 class _EmptyHint extends StatelessWidget {
@@ -701,7 +730,7 @@ class _LogTile extends ConsumerWidget {
         ),
         title: Text(entry.isFeeding ? '吃奶 · ${entry.amountMl} ml' : '小便'),
         subtitle: Text(
-          DateFormat('HH:mm').format(entry.time),
+          _formatRelativeTime(entry.time),
           style: TextStyle(color: scheme.onSurfaceVariant),
         ),
         trailing: Row(
@@ -729,5 +758,31 @@ class _LogTile extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _formatRelativeTime(DateTime time) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final recordDay = DateTime(time.year, time.month, time.day);
+    if (recordDay != today) {
+      return DateFormat('HH:mm').format(time);
+    }
+
+    final diff = now.difference(time);
+    if (diff.isNegative) {
+      return '刚刚';
+    }
+    final hours = diff.inHours;
+    final minutes = diff.inMinutes.remainder(60);
+    if (hours == 0 && minutes == 0) {
+      return '刚刚';
+    }
+    if (hours == 0) {
+      return '$minutes分钟前';
+    }
+    if (minutes == 0) {
+      return '$hours小时前';
+    }
+    return '$hours小时$minutes分前';
   }
 }

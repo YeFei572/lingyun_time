@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 
 import '../../../core/config/theme_controller.dart';
 import '../../baby_log/presentation/baby_log_controller.dart';
+import '../domain/baby_profile.dart';
+import 'baby_profile_controller.dart';
 import '../../time_silhouette/domain/s3_upload_config.dart';
 import '../../time_silhouette/presentation/s3_config_controller.dart';
 import '../../time_silhouette/presentation/time_silhouette_controller.dart';
@@ -19,6 +21,7 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s3ConfigState = ref.watch(s3ConfigControllerProvider);
+    final babyProfileState = ref.watch(babyProfileControllerProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
@@ -43,6 +46,59 @@ class SettingsPage extends ConsumerWidget {
                   onTap: () => _importBackup(context, ref),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.cake_outlined),
+              title: const Text('出生日期'),
+              subtitle: Text(
+                babyProfileState.maybeWhen(
+                  data: (profile) {
+                    final birthDate = profile.birthDate;
+                    if (birthDate == null) {
+                      return '未设置';
+                    }
+                    final birthDay = DateTime(
+                      birthDate.year,
+                      birthDate.month,
+                      birthDate.day,
+                    );
+                    final today = DateTime.now();
+                    final todayDay = DateTime(today.year, today.month, today.day);
+                    final days = todayDay.difference(birthDay).inDays;
+                    final dateText = DateFormat('yyyy年MM月dd日').format(birthDate);
+                    if (days < 0) {
+                      return dateText;
+                    }
+                    return '$dateText · 距出生 $days 天';
+                  },
+                  orElse: () => '正在读取',
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+    final currentProfile = await ref.read(babyProfileControllerProvider.future);
+                if (!context.mounted) return;
+                final nextBirthDate = await showDatePicker(
+                  context: context,
+                  initialDate: currentProfile.birthDate ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                  helpText: '选择出生日期',
+                );
+                if (nextBirthDate == null) {
+                  return;
+                }
+                await ref
+                    .read(babyProfileControllerProvider.notifier)
+                    .saveBirthDate(nextBirthDate);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('出生日期已保存')),
+                );
+              },
             ),
           ),
           const SizedBox(height: 16),

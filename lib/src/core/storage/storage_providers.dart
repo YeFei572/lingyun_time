@@ -23,3 +23,8 @@ final s3ConfigStoreProvider = FutureProvider<LocalJsonStore>((ref) async {
   final dir = await ref.watch(appDirectoryProvider.future);
   return LocalJsonStore(File('${dir.path}/s3_config.json'));
 });
+
+final babyProfileStoreProvider = FutureProvider<LocalJsonStore>((ref) async {
+  final dir = await ref.watch(appDirectoryProvider.future);
+  return LocalJsonStore(File('${dir.path}/baby_profile.json'));
+});
