@@ -18,7 +18,8 @@ class BabyLogEntry {
   final int sortOrder;
 
   bool get isFeeding => type == '吃奶';
-  bool get isUrination => type == '小便' || type == '大便';
+  bool get isUrination => type == '小便';
+  bool get isVitaminD => type == '维D';
 
   BabyLogEntry copyWith({
     String? id,
@@ -64,7 +65,8 @@ class BabyLogEntry {
     final repaired = _repairMojibake(rawType).trim();
     return switch (repaired) {
       '吃奶' => '吃奶',
-      '小便' || '大便' => '小便',
+      '小便' => '小便',
+      '维D' => '维D',
       _ => repaired,
     };
   }

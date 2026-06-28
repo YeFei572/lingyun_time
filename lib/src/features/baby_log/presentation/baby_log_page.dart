@@ -21,7 +21,7 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -66,6 +66,7 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
                 tabs: const [
                   Tab(text: '吃奶'),
                   Tab(text: '小便'),
+                  Tab(text: '维D'),
                 ],
               ),
             ),
@@ -76,6 +77,7 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
         data: (items) {
           final feedItems = items.where((e) => e.isFeeding).toList();
           final urineItems = items.where((e) => e.isUrination).toList();
+          final vitaminDItems = items.where((e) => e.isVitaminD).toList();
           final birthDate = babyProfileState.maybeWhen(
             data: (profile) => profile.birthDate,
             orElse: () => null,
@@ -96,6 +98,12 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
                 birthDate: birthDate,
                 showChartButton: false,
               ),
+              _LogList(
+                items: vitaminDItems,
+                recordKind: 'vitaminD',
+                birthDate: birthDate,
+                showChartButton: false,
+              ),
             ],
           );
         },
@@ -104,7 +112,11 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          final type = _tabController.index == 0 ? '吃奶' : '小便';
+          final type = switch (_tabController.index) {
+            0 => '吃奶',
+            1 => '小便',
+            _ => '维D',
+          };
           _showEntrySheet(context, ref, defaultType: type);
         },
         shape: const CircleBorder(),
@@ -193,6 +205,14 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
                                 onSelected: (_) => setState(() => selectedType = '小便'),
                               ),
                             ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ChoiceChip(
+                                label: const Text('维D'),
+                                selected: selectedType == '维D',
+                                onSelected: (_) => setState(() => selectedType = '维D'),
+                              ),
+                            ),
                           ],
                         );
                       },
@@ -214,12 +234,22 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
                       },
                     ),
                     const SizedBox(height: 16),
-                    _SectionLabel(selectedType == '吃奶' ? '奶量（ml）' : '次数/描述'),
+                    _SectionLabel(
+                      selectedType == '吃奶'
+                          ? '奶量（ml）'
+                          : selectedType == '维D'
+                              ? '剂量/描述'
+                              : '次数/描述',
+                    ),
                     TextField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
-                        hintText: selectedType == '吃奶' ? '例如 120' : '例如 正常',
+                        hintText: selectedType == '吃奶'
+                            ? '例如 120'
+                            : selectedType == '维D'
+                                ? '例如 400'
+                                : '例如 正常',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -715,20 +745,28 @@ class _LogTile extends ConsumerWidget {
         leading: CircleAvatar(
           backgroundColor: entry.isFeeding
               ? (isDark ? const Color(0xFF2B394A) : const Color(0xFFE8CFC3))
-              : (isDark ? const Color(0xFF313342) : const Color(0xFFE7DCC6)),
+              : entry.isVitaminD
+                  ? (isDark ? const Color(0xFF2F4033) : const Color(0xFFDDE8D4))
+                  : (isDark ? const Color(0xFF313342) : const Color(0xFFE7DCC6)),
           child: entry.isFeeding
               ? HugeIcon(
                   icon: HugeIcons.strokeRoundedBabyBottle,
                   color: isDark ? const Color(0xFFE7EAF0) : const Color(0xFF5B392B),
                   size: 23,
                 )
-              : Icon(
-                  HugeIcons.strokeRoundedDiaper,
-                  color: isDark ? const Color(0xFFE7EAF0) : const Color(0xFF5B392B),
-                  size: 23,
-                ),
+              : entry.isVitaminD
+                  ? Icon(
+                      Icons.brightness_5_outlined,
+                      color: isDark ? const Color(0xFFE7EAF0) : const Color(0xFF4E663E),
+                      size: 23,
+                    )
+                  : Icon(
+                      HugeIcons.strokeRoundedDiaper,
+                      color: isDark ? const Color(0xFFE7EAF0) : const Color(0xFF5B392B),
+                      size: 23,
+                    ),
         ),
-        title: Text(entry.isFeeding ? '吃奶 · ${entry.amountMl} ml' : '小便'),
+        title: Text(entry.isFeeding ? '吃奶 · ${entry.amountMl} ml' : entry.isVitaminD ? '维D' : '小便'),
         subtitle: Text(
           _formatRelativeTime(entry.time),
           style: TextStyle(color: scheme.onSurfaceVariant),
