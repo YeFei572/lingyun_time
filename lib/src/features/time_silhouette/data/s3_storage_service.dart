@@ -59,7 +59,7 @@ class S3StorageService {
     final endpointSegments = endpoint.pathSegments.where((e) => e.isNotEmpty).toList();
     final objectSegments = objectKey.split('/').where((e) => e.isNotEmpty).toList();
 
-    if (config.usePathStyle) {
+    if (config.usePathStyle || _requiresPathStyle(endpoint.host)) {
       return _buildUriWithoutQuery(
         source: endpoint,
         pathSegments: [...endpointSegments, config.bucket.trim(), ...objectSegments],
@@ -71,6 +71,11 @@ class S3StorageService {
       host: '${config.bucket.trim()}.${endpoint.host}',
       pathSegments: [...endpointSegments, ...objectSegments],
     );
+  }
+
+  bool _requiresPathStyle(String host) {
+    final normalizedHost = host.toLowerCase();
+    return normalizedHost == 's3.api.upyun.com';
   }
 
   Map<String, String> _buildSignedHeaders({

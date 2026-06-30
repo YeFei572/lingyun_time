@@ -40,4 +40,12 @@ class TimeSilhouetteController extends AsyncNotifier<List<MemoryItem>> {
     await repo.saveAll(current);
     state = AsyncData(current);
   }
+
+  Future<void> deleteMemory(String id) async {
+    final repo = await ref.read(memoryRepositoryProvider.future);
+    final current = [...(state.valueOrNull ?? <MemoryItem>[])];
+    current.removeWhere((item) => item.id == id);
+    await repo.saveAll(current);
+    state = AsyncData(current);
+  }
 }

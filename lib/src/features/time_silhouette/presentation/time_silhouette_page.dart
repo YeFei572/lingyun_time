@@ -45,6 +45,7 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
           onFilterChanged: (value) => setState(() => _filter = value),
           onAddPhoto: () => _pickAndUpload(context, ref, 'photo'),
           onAddVideo: () => _pickAndUpload(context, ref, 'video'),
+          onDelete: (item) => _confirmDeleteMemory(context, ref, item),
         ),
         error: (error, _) => Center(child: Text('加载失败：$error')),
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -171,6 +172,46 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
       _MemoryFilter.video => sortedItems.where((e) => e.isVideo).toList(),
     };
   }
+
+  Future<void> _confirmDeleteMemory(
+    BuildContext context,
+    WidgetRef ref,
+    MemoryItem item,
+  ) async {
+    final kindText = item.isPhoto ? '照片' : '视频';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('删除$kindText'),
+          content: Text('确认删除这条$kindText记录吗？本地记录会被删除，已上传到 S3 的文件不会自动删除。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+    await ref
+        .read(timeSilhouetteControllerProvider.notifier)
+        .deleteMemory(item.id);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$kindText记录已删除')),
+    );
+  }
 }
 
 enum _MemoryFilter { all, photo, video }
@@ -183,6 +224,7 @@ class _AlbumTimeline extends StatelessWidget {
     required this.onFilterChanged,
     required this.onAddPhoto,
     required this.onAddVideo,
+    required this.onDelete,
   });
 
   final List<MemoryItem> items;
@@ -191,6 +233,7 @@ class _AlbumTimeline extends StatelessWidget {
   final ValueChanged<_MemoryFilter> onFilterChanged;
   final VoidCallback onAddPhoto;
   final VoidCallback onAddVideo;
+  final ValueChanged<MemoryItem> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +262,11 @@ class _AlbumTimeline extends StatelessWidget {
             itemCount: groups.length,
             itemBuilder: (context, index) {
               final group = groups[index];
-              return _MemoryDaySection(group: group, visibleItems: items);
+              return _MemoryDaySection(
+                group: group,
+                visibleItems: items,
+                onDelete: onDelete,
+              );
             },
           ),
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -393,10 +440,15 @@ class _MemoryDayGroup {
 }
 
 class _MemoryDaySection extends StatelessWidget {
-  const _MemoryDaySection({required this.group, required this.visibleItems});
+  const _MemoryDaySection({
+    required this.group,
+    required this.visibleItems,
+    required this.onDelete,
+  });
 
   final _MemoryDayGroup group;
   final List<MemoryItem> visibleItems;
+  final ValueChanged<MemoryItem> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -451,6 +503,7 @@ class _MemoryDaySection extends StatelessWidget {
                   final item = group.items[index];
                   return _MemoryThumbnail(
                     item: item,
+                    onLongPress: () => onDelete(item),
                     onTap: () {
                       final initialIndex = visibleItems.indexWhere(
                         (e) => e.id == item.id,
@@ -476,10 +529,15 @@ class _MemoryDaySection extends StatelessWidget {
 }
 
 class _MemoryThumbnail extends StatelessWidget {
-  const _MemoryThumbnail({required this.item, required this.onTap});
+  const _MemoryThumbnail({
+    required this.item,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   final MemoryItem item;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -490,6 +548,7 @@ class _MemoryThumbnail extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Stack(
           fit: StackFit.expand,
           children: [

@@ -147,7 +147,8 @@ class SettingsPage extends ConsumerWidget {
                 s3ConfigState.maybeWhen(
                   data: (config) {
                     if (config.isConfigured) {
-                      return '${config.bucket} · ${config.endpoint}';
+                      final styleText = config.usePathStyle ? 'Path Style' : 'Virtual Host';
+                      return '${config.bucket} · ${config.endpoint} · $styleText';
                     }
                     return '未配置，照片和视频暂时无法上传';
                   },
@@ -392,7 +393,9 @@ class _S3ConfigDialogState extends State<_S3ConfigDialog> {
                 value: usePathStyle,
                 contentPadding: EdgeInsets.zero,
                 title: const Text('使用 Path Style'),
-                subtitle: const Text('多数 S3 兼容存储使用 endpoint/bucket/object 形式'),
+                subtitle: const Text(
+                  '开启后使用 endpoint/bucket/object；关闭后使用 bucket.endpoint/object',
+                ),
                 onChanged: (value) =>
                     setState(() => usePathStyle = value ?? true),
               ),
