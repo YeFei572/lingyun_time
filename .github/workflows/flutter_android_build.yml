@@ -1,11 +1,7 @@
 name: Flutter Android Build
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
     tags:
       - 'v*'
 
@@ -42,7 +38,7 @@ jobs:
         run: flutter pub get
 
       - name: Build release APK
-        run: flutter build apk --release --target-platform android-arm64
+        run: flutter build apk --release --split-per-abi --target-platform android-arm64
 
       - name: Prepare release files
         run: mkdir -p release && cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk release/lingyun-time-${GITHUB_REF_NAME}-arm64.apk
