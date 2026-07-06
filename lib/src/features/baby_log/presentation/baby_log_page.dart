@@ -4,9 +4,11 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/models/baby_log_entry.dart';
+import '../../../shared/widgets/delete_confirm_dialog.dart';
 import '../../settings/presentation/baby_profile_controller.dart';
 import 'baby_log_controller.dart';
 import 'feeding_chart_page.dart';
+import 'feeding_stats_page.dart';
 
 class BabyLogPage extends ConsumerStatefulWidget {
   const BabyLogPage({super.key});
@@ -39,6 +41,16 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
     return Scaffold(
       appBar: AppBar(
         title: const Text('婴儿行为记录'),
+        actions: [
+          IconButton(
+            tooltip: '吃奶统计',
+            onPressed: state.maybeWhen(
+              data: (items) => () => _openFeedingStats(context, items),
+              orElse: () => null,
+            ),
+            icon: const Icon(Icons.bar_chart_outlined),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(54),
           child: Padding(
@@ -121,6 +133,15 @@ class _BabyLogPageState extends ConsumerState<BabyLogPage> with TickerProviderSt
         },
         shape: const CircleBorder(),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  void _openFeedingStats(BuildContext context, List<BabyLogEntry> items) {
+    final feedingItems = items.where((e) => e.isFeeding).toList();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => FeedingStatsPage(items: feedingItems),
       ),
     );
   }
@@ -742,6 +763,7 @@ class _LogTile extends ConsumerWidget {
         ),
       ),
       child: ListTile(
+        onLongPress: () => _confirmDeleteEntry(context, ref),
         leading: CircleAvatar(
           backgroundColor: entry.isFeeding
               ? (isDark ? const Color(0xFF2B394A) : const Color(0xFFE8CFC3))
@@ -766,61 +788,77 @@ class _LogTile extends ConsumerWidget {
                       size: 23,
                     ),
         ),
-        title: Text(entry.isFeeding ? '吃奶 · ${entry.amountMl} ml' : entry.isVitaminD ? '维D' : '小便'),
+        title: Text(_buildTitleText(entry)),
         subtitle: Text(
           _formatRelativeTime(entry.time),
           style: TextStyle(color: scheme.onSurfaceVariant),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Tooltip(
-              message: '拖拽排序',
-              child: ReorderableDragStartListener(
-                index: dragIndex,
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Center(
-                    child: Icon(Icons.drag_handle, color: scheme.onSurfaceVariant),
-                  ),
-                ),
+        trailing: Tooltip(
+          message: '拖拽排序',
+          child: ReorderableDragStartListener(
+            index: dragIndex,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Center(
+                child: Icon(Icons.drag_handle, color: scheme.onSurfaceVariant),
               ),
             ),
-            IconButton(
-              onPressed: () => ref.read(babyLogControllerProvider.notifier).deleteEntry(entry.id),
-              icon: const Icon(HugeIcons.strokeRoundedDelete03),
-              tooltip: '删除',
-            ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  String _buildTitleText(BabyLogEntry entry) {
+    if (entry.isFeeding) {
+      return '${entry.amountMl} ml';
+    }
+    if (entry.isVitaminD) {
+      return '维D';
+    }
+    return '小便';
+  }
+
+  Future<void> _confirmDeleteEntry(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: '删除这条记录？',
+      message: '删除后这条行为记录将无法恢复，请确认是否继续。',
+    );
+    if (!confirmed) {
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    await ref.read(babyLogControllerProvider.notifier).deleteEntry(entry.id);
   }
 
   String _formatRelativeTime(DateTime time) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final recordDay = DateTime(time.year, time.month, time.day);
+    final timeText = DateFormat('HH:mm').format(time);
     if (recordDay != today) {
-      return DateFormat('HH:mm').format(time);
+      return timeText;
     }
 
     final diff = now.difference(time);
     if (diff.isNegative) {
-      return '刚刚';
+      return '刚刚 $timeText';
     }
     final hours = diff.inHours;
     final minutes = diff.inMinutes.remainder(60);
     if (hours == 0 && minutes == 0) {
-      return '刚刚';
+      return '刚刚 $timeText';
     }
     if (hours == 0) {
-      return '$minutes分钟前';
+      return '$minutes分钟前 $timeText';
     }
     if (minutes == 0) {
-      return '$hours小时前';
+      return '$hours小时前 $timeText';
     }
-    return '$hours小时$minutes分前';
+    return '$hours小时$minutes分前 $timeText';
   }
 }

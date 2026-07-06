@@ -10,12 +10,14 @@ class BackupRepository {
     required this.memoryStore,
     required this.s3ConfigStore,
     required this.babyProfileStore,
+    required this.themeConfigStore,
   });
 
   final LocalJsonStore babyLogStore;
   final LocalJsonStore memoryStore;
   final LocalJsonStore s3ConfigStore;
   final LocalJsonStore babyProfileStore;
+  final LocalJsonStore themeConfigStore;
 
   static const _backupVersion = 1;
   static const _appName = 'lingyun_time';
@@ -23,6 +25,7 @@ class BackupRepository {
   static const _memoryStoreName = 'memories.json';
   static const _s3ConfigStoreName = 's3_config.json';
   static const _babyProfileStoreName = 'baby_profile.json';
+  static const _themeConfigStoreName = 'theme_config.json';
 
   Future<String> exportTxt() async {
     final backupMap = <String, dynamic>{
@@ -37,6 +40,7 @@ class BackupRepository {
         _memoryStoreName: _normalizeMemoryStoreMap(await memoryStore.readMap()),
         _s3ConfigStoreName: await s3ConfigStore.readMap(),
         _babyProfileStoreName: await babyProfileStore.readMap(),
+        _themeConfigStoreName: await themeConfigStore.readMap(),
       },
     };
 
@@ -80,6 +84,7 @@ class BackupRepository {
     );
     await s3ConfigStore.writeMap(_readStoreMap(stores, _s3ConfigStoreName));
     await babyProfileStore.writeMap(_readStoreMap(stores, _babyProfileStoreName));
+    await themeConfigStore.writeMap(_readStoreMap(stores, _themeConfigStoreName));
   }
 
   Future<void> _importLegacyBabyLogs(String content) async {

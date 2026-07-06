@@ -8,11 +8,13 @@ final backupRepositoryProvider = FutureProvider<BackupRepository>((ref) async {
   final memoryStore = await ref.watch(memoryStoreProvider.future);
   final s3ConfigStore = await ref.watch(s3ConfigStoreProvider.future);
   final babyProfileStore = await ref.watch(babyProfileStoreProvider.future);
+  final themeConfigStore = await ref.watch(themeConfigStoreProvider.future);
 
   return BackupRepository(
     babyLogStore: babyLogStore,
     memoryStore: memoryStore,
     s3ConfigStore: s3ConfigStore,
     babyProfileStore: babyProfileStore,
+    themeConfigStore: themeConfigStore,
   );
 });

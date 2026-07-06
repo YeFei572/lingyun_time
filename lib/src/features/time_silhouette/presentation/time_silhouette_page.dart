@@ -1,9 +1,13 @@
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/models/memory_item.dart';
+import '../../../shared/widgets/delete_confirm_dialog.dart';
 import '../data/s3_storage_service.dart';
 import 's3_config_controller.dart';
 import 'time_silhouette_controller.dart';
@@ -179,27 +183,13 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
     MemoryItem item,
   ) async {
     final kindText = item.isPhoto ? '照片' : '视频';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text('删除$kindText'),
-          content: Text('确认删除这条$kindText记录吗？本地记录会被删除，已上传到 S3 的文件不会自动删除。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('删除'),
-            ),
-          ],
-        );
-      },
+    final confirmed = await showDeleteConfirmDialog(
+      context,
+      title: '删除这条$kindText？',
+      message: '删除后本地剪影记录将无法恢复。已上传到 S3 的文件不会自动删除。',
     );
 
-    if (confirmed != true) {
+    if (!confirmed) {
       return;
     }
     await ref
@@ -553,10 +543,12 @@ class _MemoryThumbnail extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (item.isPhoto && item.remoteUrl.isNotEmpty)
-              Image.network(
-                item.remoteUrl,
+              CachedNetworkImage(
+                imageUrl: item.remoteUrl,
+                cacheKey: item.id,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
+                placeholder: (context, url) => _ThumbnailFallback(item: item),
+                errorWidget: (context, url, error) =>
                     _ThumbnailFallback(item: item),
               )
             else
@@ -636,6 +628,12 @@ class _MemoryPreviewPageState extends State<_MemoryPreviewPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _precacheAround(_index);
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
@@ -657,7 +655,10 @@ class _MemoryPreviewPageState extends State<_MemoryPreviewPage> {
             child: PageView.builder(
               controller: _pageController,
               itemCount: widget.items.length,
-              onPageChanged: (value) => setState(() => _index = value),
+              onPageChanged: (value) {
+                setState(() => _index = value);
+                _precacheAround(value);
+              },
               itemBuilder: (context, index) {
                 final pageItem = widget.items[index];
                 return _MemoryPreviewBody(item: pageItem);
@@ -701,24 +702,64 @@ class _MemoryPreviewPageState extends State<_MemoryPreviewPage> {
       ),
     );
   }
+
+  void _precacheAround(int index) {
+    for (final targetIndex in [index - 1, index, index + 1]) {
+      if (targetIndex < 0 || targetIndex >= widget.items.length) {
+        continue;
+      }
+      final item = widget.items[targetIndex];
+      if (!item.isPhoto || item.remoteUrl.isEmpty) {
+        continue;
+      }
+      unawaited(
+        precacheImage(
+          CachedNetworkImageProvider(item.remoteUrl, cacheKey: item.id),
+          context,
+        ).catchError((_) {}),
+      );
+    }
+  }
 }
 
-class _MemoryPreviewBody extends StatelessWidget {
+class _MemoryPreviewBody extends StatefulWidget {
   const _MemoryPreviewBody({required this.item});
 
   final MemoryItem item;
 
   @override
+  State<_MemoryPreviewBody> createState() => _MemoryPreviewBodyState();
+}
+
+class _MemoryPreviewBodyState extends State<_MemoryPreviewBody>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
+    final item = widget.item;
     if (item.isPhoto && item.remoteUrl.isNotEmpty) {
       return InteractiveViewer(
         minScale: 1,
         maxScale: 4,
         child: Center(
-          child: Image.network(
-            item.remoteUrl,
+          child: CachedNetworkImage(
+            imageUrl: item.remoteUrl,
+            cacheKey: item.id,
             fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
+            placeholder: (context, url) {
+              return const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  color: Colors.white70,
+                  strokeWidth: 2,
+                ),
+              );
+            },
+            errorWidget: (context, url, error) {
               return const Icon(
                 Icons.broken_image_outlined,
                 color: Colors.white70,

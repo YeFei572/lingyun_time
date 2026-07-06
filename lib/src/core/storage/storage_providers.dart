@@ -28,3 +28,8 @@ final babyProfileStoreProvider = FutureProvider<LocalJsonStore>((ref) async {
   final dir = await ref.watch(appDirectoryProvider.future);
   return LocalJsonStore(File('${dir.path}/baby_profile.json'));
 });
+
+final themeConfigStoreProvider = FutureProvider<LocalJsonStore>((ref) async {
+  final dir = await ref.watch(appDirectoryProvider.future);
+  return LocalJsonStore(File('${dir.path}/theme_config.json'));
+});

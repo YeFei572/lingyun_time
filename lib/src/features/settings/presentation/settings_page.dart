@@ -127,9 +127,10 @@ class SettingsPage extends ConsumerWidget {
                           ),
                         ],
                         selected: {mode},
-                        onSelectionChanged: (value) {
-                          ref.read(themeModeProvider.notifier).state =
-                              value.first;
+                        onSelectionChanged: (value) async {
+                          await ref
+                              .read(themeModeProvider.notifier)
+                              .setThemeMode(value.first);
                         },
                       );
                     },
@@ -256,7 +257,8 @@ class SettingsPage extends ConsumerWidget {
       ref
         ..invalidate(babyLogControllerProvider)
         ..invalidate(timeSilhouetteControllerProvider)
-        ..invalidate(s3ConfigControllerProvider);
+        ..invalidate(s3ConfigControllerProvider)
+        ..invalidate(themeModeProvider);
 
       if (!context.mounted) {
         return;
