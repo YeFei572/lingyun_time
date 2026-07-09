@@ -23,6 +23,7 @@ class TimeSilhouetteController extends AsyncNotifier<List<MemoryItem>> {
     required String localPath,
     required String remoteUrl,
     required DateTime createdAt,
+    String coverUrl = '',
   }) async {
     final repo = await ref.read(memoryRepositoryProvider.future);
     final current = [...(state.valueOrNull ?? <MemoryItem>[])];
@@ -35,6 +36,7 @@ class TimeSilhouetteController extends AsyncNotifier<List<MemoryItem>> {
         localPath: localPath,
         remoteUrl: remoteUrl,
         createdAt: createdAt,
+        coverUrl: coverUrl,
       ),
     );
     await repo.saveAll(current);

@@ -20,6 +20,7 @@
 - path_provider：应用本地数据目录
 - file_picker：文件选择、备份导入导出
 - cached_network_image：网络图片缓存与展示
+- video_player：远程视频播放
 - fl_chart：奶量曲线图
 - crypto：S3 请求签名
 - hugeicons：部分界面图标

@@ -8,6 +8,7 @@ class MemoryItem {
     required this.localPath,
     required this.remoteUrl,
     required this.createdAt,
+    this.coverUrl = '',
   });
 
   final String id;
@@ -16,6 +17,7 @@ class MemoryItem {
   final String localPath;
   final String remoteUrl;
   final DateTime createdAt;
+  final String coverUrl;
 
   bool get isPhoto => kind == 'photo';
   bool get isVideo => kind == 'video';
@@ -27,6 +29,7 @@ class MemoryItem {
     'localPath': localPath,
     'remoteUrl': remoteUrl,
     'createdAt': createdAt.toIso8601String(),
+    'coverUrl': coverUrl,
   };
 
   factory MemoryItem.fromJson(Map<String, dynamic> json) {
@@ -40,6 +43,7 @@ class MemoryItem {
       localPath: json['localPath'] as String? ?? '',
       remoteUrl: _normalizeRemoteUrl(json['remoteUrl'] as String? ?? ''),
       createdAt: createdAt,
+      coverUrl: _normalizeRemoteUrl(json['coverUrl'] as String? ?? ''),
     );
   }
 

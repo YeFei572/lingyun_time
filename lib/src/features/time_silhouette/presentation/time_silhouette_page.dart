@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:video_player/video_player.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../../../shared/models/memory_item.dart';
 import '../../../shared/widgets/delete_confirm_dialog.dart';
@@ -105,11 +108,21 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
     );
 
     try {
-      final remoteUrl = await S3StorageService(config).uploadFile(
+      final storageService = S3StorageService(config);
+      final remoteUrl = await storageService.uploadFile(
         localPath: file.path!,
         objectKey: objectKey,
         mimeType: mimeType,
       );
+      final coverUrl = kind == 'video'
+          ? await _generateAndUploadVideoCover(
+              storageService: storageService,
+              videoPath: file.path!,
+              videoFileName: file.name,
+              pathPrefix: config.pathPrefix,
+              createdAt: createdAt,
+            )
+          : '';
       await ref
           .read(timeSilhouetteControllerProvider.notifier)
           .addMemory(
@@ -117,6 +130,7 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
             localPath: file.path!,
             remoteUrl: remoteUrl,
             createdAt: createdAt,
+            coverUrl: coverUrl,
           );
       if (!context.mounted) return;
       messenger.hideCurrentSnackBar();
@@ -128,6 +142,44 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
     }
   }
 
+  Future<String> _generateAndUploadVideoCover({
+    required S3StorageService storageService,
+    required String videoPath,
+    required String videoFileName,
+    required String pathPrefix,
+    required DateTime createdAt,
+  }) async {
+    try {
+      final thumbnailPath = await VideoThumbnail.thumbnailFile(
+        video: videoPath,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 720,
+        quality: 82,
+      );
+      if (thumbnailPath == null || thumbnailPath.isEmpty) {
+        return '';
+      }
+
+      final thumbnailFile = File(thumbnailPath);
+      if (!await thumbnailFile.exists()) {
+        return '';
+      }
+
+      return storageService.uploadFile(
+        localPath: thumbnailPath,
+        objectKey: _buildObjectKey(
+          kind: 'videoCover',
+          fileName: _coverFileNameFor(videoFileName),
+          pathPrefix: pathPrefix,
+          createdAt: createdAt,
+        ),
+        mimeType: 'image/jpeg',
+      );
+    } catch (_) {
+      return '';
+    }
+  }
+
   String _buildObjectKey({
     required String kind,
     required String fileName,
@@ -135,7 +187,11 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
     required DateTime createdAt,
   }) {
     final prefix = pathPrefix.trim().replaceAll(RegExp(r'^/+|/+$'), '');
-    final kindDir = kind == 'photo' ? 'photos' : 'videos';
+    final kindDir = switch (kind) {
+      'video' => 'videos',
+      'videoCover' => 'video-covers',
+      _ => 'photos',
+    };
     final safeFileName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     final datePath = [
       createdAt.year.toString().padLeft(4, '0'),
@@ -149,6 +205,13 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
       datePath,
       finalName,
     ].join('/');
+  }
+
+  String _coverFileNameFor(String videoFileName) {
+    final safeBaseName = videoFileName
+        .replaceFirst(RegExp(r'\.[^.]*$'), '')
+        .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    return '${safeBaseName.isEmpty ? 'video' : safeBaseName}.jpg';
   }
 
   String _resolveMimeType(String? extension, String kind) {
@@ -198,9 +261,9 @@ class _TimeSilhouettePageState extends ConsumerState<TimeSilhouettePage> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$kindText记录已删除')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$kindText记录已删除')));
   }
 }
 
@@ -542,10 +605,10 @@ class _MemoryThumbnail extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (item.isPhoto && item.remoteUrl.isNotEmpty)
+            if (_thumbnailUrlFor(item).isNotEmpty)
               CachedNetworkImage(
-                imageUrl: item.remoteUrl,
-                cacheKey: item.id,
+                imageUrl: _thumbnailUrlFor(item),
+                cacheKey: '${item.id}-thumbnail',
                 fit: BoxFit.cover,
                 placeholder: (context, url) => _ThumbnailFallback(item: item),
                 errorWidget: (context, url, error) =>
@@ -578,6 +641,16 @@ class _MemoryThumbnail extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _thumbnailUrlFor(MemoryItem item) {
+    if (item.isVideo) {
+      return item.coverUrl;
+    }
+    if (item.isPhoto) {
+      return item.remoteUrl;
+    }
+    return '';
   }
 }
 
@@ -661,7 +734,10 @@ class _MemoryPreviewPageState extends State<_MemoryPreviewPage> {
               },
               itemBuilder: (context, index) {
                 final pageItem = widget.items[index];
-                return _MemoryPreviewBody(item: pageItem);
+                return _MemoryPreviewBody(
+                  item: pageItem,
+                  isActive: index == _index,
+                );
               },
             ),
           ),
@@ -723,9 +799,10 @@ class _MemoryPreviewPageState extends State<_MemoryPreviewPage> {
 }
 
 class _MemoryPreviewBody extends StatefulWidget {
-  const _MemoryPreviewBody({required this.item});
+  const _MemoryPreviewBody({required this.item, required this.isActive});
 
   final MemoryItem item;
+  final bool isActive;
 
   @override
   State<_MemoryPreviewBody> createState() => _MemoryPreviewBodyState();
@@ -771,6 +848,231 @@ class _MemoryPreviewBodyState extends State<_MemoryPreviewBody>
       );
     }
 
+    if (item.isVideo && item.remoteUrl.isNotEmpty) {
+      return _VideoPreview(item: item, isActive: widget.isActive);
+    }
+
+    return _VideoFallback(item: item);
+  }
+}
+
+class _VideoPreview extends StatefulWidget {
+  const _VideoPreview({required this.item, required this.isActive});
+
+  final MemoryItem item;
+  final bool isActive;
+
+  @override
+  State<_VideoPreview> createState() => _VideoPreviewState();
+}
+
+class _VideoPreviewState extends State<_VideoPreview> {
+  late VideoPlayerController _controller;
+  late Future<void> _initializeFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.remoteUrl != widget.item.remoteUrl) {
+      _controller
+        ..removeListener(_onVideoChanged)
+        ..dispose();
+      _setupController();
+      return;
+    }
+    if (!widget.isActive && _controller.value.isPlaying) {
+      _controller.pause();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_onVideoChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _initializeFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _VideoError(message: snapshot.error.toString());
+        }
+
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                color: Colors.white70,
+                strokeWidth: 2,
+              ),
+            ),
+          );
+        }
+
+        final value = _controller.value;
+        if (value.hasError) {
+          return _VideoError(message: value.errorDescription ?? '视频加载失败');
+        }
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _togglePlay,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Center(
+                child: AspectRatio(
+                  aspectRatio: value.aspectRatio == 0
+                      ? 16 / 9
+                      : value.aspectRatio,
+                  child: VideoPlayer(_controller),
+                ),
+              ),
+              if (!value.isPlaying)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.48),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(18),
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 48,
+                    ),
+                  ),
+                ),
+              if (value.isBuffering)
+                const Positioned(
+                  top: 24,
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white70,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
+                child: _VideoControls(controller: _controller),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _setupController() {
+    _controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.item.remoteUrl),
+    )..addListener(_onVideoChanged);
+    _initializeFuture = _controller.initialize();
+  }
+
+  void _onVideoChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _togglePlay() async {
+    if (!_controller.value.isInitialized) {
+      return;
+    }
+    if (_controller.value.isPlaying) {
+      await _controller.pause();
+      return;
+    }
+    await _controller.play();
+  }
+}
+
+class _VideoControls extends StatelessWidget {
+  const _VideoControls({required this.controller});
+
+  final VideoPlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = controller.value;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.48),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            VideoProgressIndicator(
+              controller,
+              allowScrubbing: true,
+              colors: const VideoProgressColors(
+                playedColor: Colors.white,
+                bufferedColor: Colors.white38,
+                backgroundColor: Colors.white24,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  value.isPlaying
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${_formatDuration(value.position)} / ${_formatDuration(value.duration)}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    if (hours > 0) {
+      return '$hours:$minutes:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+}
+
+class _VideoFallback extends StatelessWidget {
+  const _VideoFallback({required this.item});
+
+  final MemoryItem item;
+
+  @override
+  Widget build(BuildContext context) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -786,6 +1088,33 @@ class _MemoryPreviewBodyState extends State<_MemoryPreviewBody>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VideoError extends StatelessWidget {
+  const _VideoError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white70, size: 54),
+            const SizedBox(height: 14),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, height: 1.45),
+            ),
+          ],
+        ),
       ),
     );
   }
